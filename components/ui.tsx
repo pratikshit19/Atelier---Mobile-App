@@ -1,6 +1,6 @@
 import React from 'react';
 import { TouchableOpacity, Text, View, TextInput } from 'react-native';
-import { cn } from '../lib/utils'; // I'll create this
+import { cn } from '../lib/utils';
 
 export const Button = ({ className, variant = 'primary', size = 'default', children, ...props }: any) => {
   const variants: any = {
@@ -11,10 +11,10 @@ export const Button = ({ className, variant = 'primary', size = 'default', child
   };
   
   const sizes: any = {
-    default: 'py-3 px-6',
-    sm: 'py-2 px-4',
-    lg: 'py-4 px-8',
-    icon: 'p-3',
+    default: 'py-2.5 px-4',
+    sm: 'py-2 px-3',
+    lg: 'py-3 px-5',
+    icon: 'p-2.5',
   };
 
   return (
@@ -33,7 +33,7 @@ export const Button = ({ className, variant = 'primary', size = 'default', child
 };
 
 export const Card = ({ className, children }: any) => (
-  <View className={cn("bg-card border border-white/5 rounded-xl overflow-hidden shadow-xl", className)}>
+  <View className={cn("bg-card border border-white/10 rounded-3xl overflow-hidden", className)}>
     {children}
   </View>
 );
@@ -41,10 +41,18 @@ export const Card = ({ className, children }: any) => (
 export const Input = ({ className, ...props }: any) => (
   <TextInput
     className={cn(
-      "bg-card border border-white/5 rounded-xl px-4 py-3 text-white text-sm focus:border-primary",
+      "bg-card border border-white/10 rounded-3xl px-4 py-3 text-white text-sm",
       className
     )}
     placeholderTextColor="#71717a"
     {...props}
   />
+);
+
+export const Badge = ({ className, children }: any) => (
+  <View className={cn("rounded-full bg-white/5 px-3 py-1", className)}>
+    <Text className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+      {children}
+    </Text>
+  </View>
 );

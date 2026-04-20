@@ -9,9 +9,11 @@ import {
   Animated,
   ScrollView,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useLocalSearchParams } from 'expo-router';
 import { Palette, Save, Trash2, Plus } from 'lucide-react-native';
 import { Button } from '../../components/ui';
 
@@ -66,6 +68,9 @@ const DraggableItem = ({
 
 export default function CanvasScreen() {
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams() as { item_id?: string };
+  const itemId = params.item_id;
   const [items, setItems] = useState<StudioItem[]>([]);
   const [closetItems, setClosetItems] = useState<ClosetItem[]>([]);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -75,6 +80,23 @@ export default function CanvasScreen() {
   useEffect(() => {
     fetchClosetItems();
   }, [user]);
+
+  useEffect(() => {
+    if (!itemId || !user) return;
+
+    const loadSelectedItem = async () => {
+      const { data, error } = await supabase
+        .from('items')
+        .select('*')
+        .eq('id', itemId)
+        .single();
+
+      if (error || !data) return;
+      addItem(data as ClosetItem);
+    };
+
+    loadSelectedItem();
+  }, [itemId, user]);
 
   const fetchClosetItems = async () => {
     if (!user) return;
@@ -88,13 +110,17 @@ export default function CanvasScreen() {
   const toggleDrawer = (open: boolean) => {
     setIsDrawerOpen(open);
     Animated.spring(drawerY, {
-      toValue: open ? SCREEN_HEIGHT * 0.3 : SCREEN_HEIGHT,
+      toValue: open ? SCREEN_HEIGHT * 0.2 : SCREEN_HEIGHT,
       useNativeDriver: true,
       bounciness: 0,
     }).start();
   };
 
   const addItem = (item: ClosetItem) => {
+    if (items.some((existing) => existing.image_url === item.image_url)) {
+      return;
+    }
+
     const newItem: StudioItem = {
       id: Math.random().toString(36).substring(2, 11),
       image_url: item.image_url,
@@ -125,7 +151,20 @@ export default function CanvasScreen() {
           <Palette size={24} color="#6366f1" />
           <Text style={styles.headerTitle}>Studio</Text>
         </View>
-        <Button size="sm" onPress={() => {}}>
+        <Button size="sm" onPress={async () => {
+          if (items.length === 0) {
+            alert('Add items to the board before saving.');
+            return;
+          }
+
+          try {
+            await AsyncStorage.setItem('@atelier_saved_canvas', JSON.stringify({ savedAt: Date.now(), items }));
+            alert('Board saved locally. You can continue designing or reopen this screen later.');
+          } catch (error) {
+            console.error(error);
+            alert('Failed to save the board.');
+          }
+        }}>
           <Save size={16} color="white" />
           <Text style={styles.saveText}>Save</Text>
         </Button>
@@ -159,7 +198,12 @@ export default function CanvasScreen() {
 
       {/* Bottom Floating Button */}
       {!isDrawerOpen && (
-        <View style={styles.addButtonContainer}>
+        <View
+          style={[
+            styles.addButtonContainer,
+            { bottom: insets.bottom + 104 },
+          ]}
+        >
           <TouchableOpacity
             style={styles.addButton}
             onPress={() => toggleDrawer(true)}
@@ -353,7 +397,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: SCREEN_HEIGHT * 0.7,
+    height: SCREEN_HEIGHT * 0.8,
     backgroundColor: '#18181b',
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.1)',
