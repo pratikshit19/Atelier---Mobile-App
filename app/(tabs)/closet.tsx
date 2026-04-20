@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
-import { Search, Plus, Filter, Shirt } from 'lucide-react-native';
+import { Search, Plus, Trash2 } from 'lucide-react-native';
 import { Input, Button } from '../../components/ui';
 import * as ImagePicker from 'expo-image-picker';
 
@@ -20,7 +20,7 @@ export default function ClosetScreen() {
   const fetchItems = async () => {
     if (!user) return;
     try {
-      let query = supabase.from('items').select('*').order('created_at', { ascending: false });
+      let query = supabase.from('items').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
       if (category) query = query.eq('category', category);
       const { data, error } = await query;
       if (error) throw error;
@@ -69,7 +69,7 @@ export default function ClosetScreen() {
 
         const { error: dbError } = await supabase.from('items').insert({
           user_id: user?.id,
-          name: 'New Mobile Item',
+          name: 'New Item',
           category: 'Tops',
           image_url: publicUrl,
         });
@@ -93,6 +93,30 @@ export default function ClosetScreen() {
     return bytes;
   };
 
+  const deleteItem = async (itemId: string) => {
+    try {
+      const item = items.find((i) => i.id === itemId);
+      if (!item) return;
+
+      // Delete from storage
+      if (item.image_url) {
+        const fileName = item.image_url.split('/').pop();
+        if (fileName) {
+          await supabase.storage.from('closet').remove([`${user?.id}/${fileName}`]);
+        }
+      }
+
+      // Delete from database
+      const { error } = await supabase.from('items').delete().eq('id', itemId);
+      if (error) throw error;
+
+      // Update local state
+      setItems(items.filter((i) => i.id !== itemId));
+    } catch (error: any) {
+      alert('Failed to delete item: ' + error.message);
+    }
+  };
+
   const filteredItems = items.filter((item) =>
     item.name.toLowerCase().includes(search.toLowerCase())
   );
@@ -100,47 +124,39 @@ export default function ClosetScreen() {
   return (
     <SafeAreaView className="flex-1 bg-[#09090b]">
       <View className="px-6 pt-8 pb-4">
-        <View className="flex-row items-center justify-between mb-5">
-          <View>
-            <Text className="text-white text-2xl font-semibold tracking-tight">Your Closet</Text>
-            <Text className="text-muted-foreground mt-2 text-sm leading-6">
-              Refining your personal collection.
-            </Text>
+        <Text className="text-white text-4xl font-bold mb-1">Your Closet</Text>
+        <Text className="text-muted-foreground text-sm mb-6">Refining your personal collection.</Text>
+
+        {/* Add Item Link */}
+        <TouchableOpacity onPress={pickImage} className="rounded-lg py-3 px-4 mb-6 border border-white/10 bg-white/5">
+          <View className="flex-row items-center gap-3">
+            <Plus size={18} color="#a1a1aa" />
+            <Text className="text-white/60 text-sm font-semibold">Add Item</Text>
           </View>
-          <Button size="icon" className="rounded-full h-11 w-11" onPress={pickImage}>
-            <Plus size={20} color="white" />
-          </Button>
+        </TouchableOpacity>
+
+        {/* Search */}
+        <View className="relative mb-4">
+          <View className="absolute left-3 top-0 z-10 h-full justify-center">
+            <Search size={16} color="#71717a" />
+          </View>
+          <Input
+            className="pl-10 h-10 text-sm bg-white/5 border border-white/10 rounded-lg"
+            placeholder="Search collection..."
+            placeholderTextColor="#71717a"
+            value={search}
+            onChangeText={setSearch}
+          />
         </View>
 
-        <View className="flex-row gap-2 mb-4">
-          <View className="flex-1 relative">
-            <View className="absolute left-3 top-3 z-10">
-              <Search size={18} color="#71717a" />
-            </View>
-            <Input
-              className="pl-10 h-11"
-              placeholder="Search collection..."
-              value={search}
-              onChangeText={setSearch}
-            />
-          </View>
-          <Button
-            variant="secondary"
-            size="icon"
-            className="h-11 w-11"
-            onPress={() => setCategory(null)}
-          >
-            <Filter size={18} color="#71717a" />
-          </Button>
-        </View>
-
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-5">
+        {/* Category Filters */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-4">
           {['All', 'Tops', 'Bottoms', 'Outerwear', 'Shoes'].map((cat) => (
             <TouchableOpacity
               key={cat}
               onPress={() => setCategory(cat === 'All' ? null : cat)}
-              className={`mr-3 rounded-full px-4 py-2 border ${category === cat || (cat === 'All' && !category) ? 'border-primary bg-primary/10' : 'border-white/10 bg-white/5'}`}>
-              <Text className={`text-[10px] uppercase tracking-[0.3em] font-semibold ${category === cat || (cat === 'All' && !category) ? 'text-white' : 'text-muted-foreground'}`}>
+              className={`mr-2 rounded-full px-3 py-1.5 border ${category === cat || (cat === 'All' && !category) ? 'border-white bg-white/10' : 'border-white/10 bg-white/5'}`}>
+              <Text className={`text-[10px] uppercase tracking-[0.2em] font-semibold ${category === cat || (cat === 'All' && !category) ? 'text-white' : 'text-muted-foreground'}`}>
                 {cat}
               </Text>
             </TouchableOpacity>
@@ -150,34 +166,42 @@ export default function ClosetScreen() {
 
       {loading ? (
         <View className="flex-1 items-center justify-center">
-          <ActivityIndicator color="#6366f1" />
+          <ActivityIndicator color="#ffffff" />
         </View>
       ) : (
         <FlatList
           data={filteredItems}
           numColumns={2}
           keyExtractor={(item) => item.id}
-          columnWrapperStyle={{ paddingHorizontal: 20, gap: 16 }}
+          columnWrapperStyle={{ paddingHorizontal: 24, gap: 12 }}
           contentContainerStyle={{ paddingBottom: 100 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#6366f1" />}
+          scrollEnabled={true}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#ffffff" />}
           renderItem={({ item }) => (
             <TouchableOpacity
-              className="flex-1 mb-4"
+              className="flex-1 mb-3 relative"
               onPress={() => router.push(`/canvas?item_id=${item.id}`)}
+              activeOpacity={0.7}
             >
-              <View className="bg-card border border-white/5 rounded-3xl overflow-hidden aspect-square">
+              <View className="bg-white/5 border border-white/10 rounded-[18px] overflow-hidden aspect-square">
                 <Image source={{ uri: item.image_url }} className="w-full h-full" resizeMode="cover" />
+                <TouchableOpacity
+                  onPress={() => deleteItem(item.id)}
+                  className="absolute top-2 right-2 bg-black/60 rounded-full p-2 border border-white/20"
+                  activeOpacity={0.7}
+                >
+                  <Trash2 size={16} color="#ff6b6b" />
+                </TouchableOpacity>
               </View>
-              <View className="mt-3 px-1">
-                <Text className="text-white font-bold text-sm truncate">{item.name}</Text>
-                <Text className="text-muted-foreground text-[10px] uppercase tracking-[0.35em] mt-1">{item.category}</Text>
+              <View className="mt-2">
+                <Text className="text-white font-semibold text-sm truncate">{item.name}</Text>
+                <Text className="text-muted-foreground text-[9px] uppercase tracking-[0.15em] mt-0.5">{item.category}</Text>
               </View>
             </TouchableOpacity>
           )}
           ListEmptyComponent={
             <View className="flex-1 items-center justify-center py-20">
-              <Shirt size={48} color="#27272a" />
-              <Text className="text-muted-foreground text-sm mt-4">Your closet is empty.</Text>
+              <Text className="text-muted-foreground text-sm">Your closet is empty.</Text>
             </View>
           }
         />

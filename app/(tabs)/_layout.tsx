@@ -13,17 +13,19 @@ export default function TabLayout() {
           left: 16,
           right: 16,
           elevation: 10,
-          backgroundColor: '#111827',
+          backgroundColor: '#050505',
           borderRadius: 36,
           height: 72,
+          borderWidth: 1,
+          borderColor: 'rgba(255, 255, 255, 0.15)',
           borderTopColor: 'transparent',
           shadowColor: '#000',
-          shadowOpacity: 0.18,
+          shadowOpacity: 0.25,
           shadowRadius: 20,
           shadowOffset: { width: 0, height: 8 },
         },
-        tabBarActiveTintColor: '#6366f1',
-        tabBarInactiveTintColor: '#71717a',
+        tabBarActiveTintColor: '#f5f5f5',
+        tabBarInactiveTintColor: '#6b6b6b',
       }}
     >
       <Tabs.Screen
