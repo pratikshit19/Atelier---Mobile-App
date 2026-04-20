@@ -3,19 +3,25 @@ import { View, Text, TextInput, TouchableOpacity, ScrollView } from 'react-nativ
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../lib/supabase';
 import { useRouter } from 'expo-router';
-import { Mail, Lock, ArrowRight } from 'lucide-react-native';
+import { Mail, Lock, ArrowLeft } from 'lucide-react-native';
 
-export default function LoginScreen() {
+export default function SignupScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  const handleLogin = async () => {
+  const handleSignup = async () => {
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) alert(error.message);
-    else router.replace('/');
+    const { error } = await supabase.auth.signUp({ email, password });
+    if (error) {
+      alert(error.message);
+      setLoading(false);
+      return;
+    }
+
+    alert('Check your inbox for a confirmation email.');
+    router.replace('/login');
     setLoading(false);
   };
 
@@ -24,7 +30,7 @@ export default function LoginScreen() {
       <ScrollView className="px-6 py-12">
         <View className="mb-12">
           <Text className="text-primary font-bold uppercase tracking-widest text-xs mb-4">Atelier Studio</Text>
-          <Text className="text-white text-4xl font-bold tracking-tight">Sign In</Text>
+          <Text className="text-white text-4xl font-bold tracking-tight">Create Account</Text>
         </View>
 
         <View className="space-y-4">
@@ -39,6 +45,7 @@ export default function LoginScreen() {
               value={email}
               onChangeText={setEmail}
               autoCapitalize="none"
+              keyboardType="email-address"
             />
           </View>
 
@@ -56,22 +63,21 @@ export default function LoginScreen() {
             />
           </View>
 
-          <TouchableOpacity 
-            onPress={handleLogin}
+          <TouchableOpacity
+            onPress={handleSignup}
             disabled={loading}
             className="bg-primary rounded-xl py-4 items-center flex-row justify-center gap-2"
           >
             <Text className="text-white font-bold uppercase tracking-widest text-sm">
-              {loading ? 'Entering...' : 'Sign In'}
+              {loading ? 'Creating...' : 'Create Account'}
             </Text>
-            <ArrowRight size={18} color="white" />
           </TouchableOpacity>
         </View>
 
-        <View className="mt-8 flex-row justify-center">
-          <Text className="text-muted-foreground text-sm">Don't have an account? </Text>
-          <TouchableOpacity onPress={() => router.push('/signup')}>
-            <Text className="text-primary font-bold text-sm">Create one</Text>
+        <View className="mt-8 flex-row items-center justify-center gap-2">
+          <TouchableOpacity onPress={() => router.push('/login')} className="flex-row items-center gap-2">
+            <ArrowLeft size={18} color="#6366f1" />
+            <Text className="text-primary font-bold text-sm">Back to sign in</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>

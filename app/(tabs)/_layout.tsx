@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Shirt, Palette, Calendar, LayoutDashboard } from 'lucide-react-native';
+import { Shirt, Palette, Calendar, LayoutDashboard, User } from 'lucide-react-native';
 
 export default function TabLayout() {
   return (
@@ -49,6 +49,13 @@ export default function TabLayout() {
         options={{
           title: 'Plan',
           tabBarIcon: ({ color }) => <Calendar size={24} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="account"
+        options={{
+          title: 'Account',
+          tabBarIcon: ({ color }) => <User size={24} color={color} />,
         }}
       />
     </Tabs>

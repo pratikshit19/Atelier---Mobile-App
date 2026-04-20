@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, Image, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, FlatList, Image, TouchableOpacity, ActivityIndicator, RefreshControl, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { Search, Plus, Filter, Shirt } from 'lucide-react-native';
@@ -8,8 +9,10 @@ import { Input, Button } from '../../components/ui';
 import * as ImagePicker from 'expo-image-picker';
 
 export default function ClosetScreen() {
+  const router = useRouter();
   const { user } = useAuth();
   const [items, setItems] = useState<any[]>([]);
+  const [outfits, setOutfits] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
@@ -32,13 +35,32 @@ export default function ClosetScreen() {
     }
   };
 
+  const fetchOutfits = async () => {
+    if (!user) return;
+    try {
+      const { data, error } = await supabase
+        .from('outfits')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(6);
+
+      if (error) throw error;
+      setOutfits(data || []);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   useEffect(() => {
     fetchItems();
-  }, [category]);
+    fetchOutfits();
+  }, [category, user]);
 
   const onRefresh = () => {
     setRefreshing(true);
     fetchItems();
+    fetchOutfits();
   };
 
   const pickImage = async () => {
@@ -148,6 +170,49 @@ export default function ClosetScreen() {
               </Text>
             </TouchableOpacity>
           ))}
+        </View>
+
+        <View className="mb-6">
+          <View className="flex-row items-center justify-between mb-3 px-1">
+            <Text className="text-white font-bold text-sm uppercase tracking-widest">My Outfits</Text>
+            <TouchableOpacity onPress={() => router.push('/outfits')}>
+              <Text className="text-primary text-[10px] font-bold uppercase">View all</Text>
+            </TouchableOpacity>
+          </View>
+
+          {outfits.length > 0 ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} className="px-1">
+              {outfits.map((outfit) => {
+                const outfitImage = outfit.preview_image || outfit.image_url || outfit.cover_image || outfit.image;
+                return (
+                  <TouchableOpacity key={outfit.id} className="mr-4 w-44">
+                    <View className="bg-card border border-white/5 rounded-3xl overflow-hidden h-36 mb-3 items-center justify-center">
+                      {outfitImage ? (
+                        <Image
+                          source={{ uri: outfitImage }}
+                          className="w-full h-full"
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <View className="w-full h-full items-center justify-center bg-white/5">
+                          <Shirt size={32} color="#71717a" />
+                        </View>
+                      )}
+                    </View>
+                    <Text className="text-white font-bold text-sm truncate">{outfit.name || 'Untitled Outfit'}</Text>
+                    <Text className="text-muted-foreground text-[10px] uppercase tracking-widest">{outfit.category || 'Outfit'}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          ) : (
+            <View className="bg-card border border-white/5 rounded-3xl p-4 items-center">
+              <Shirt size={24} color="#71717a" />
+              <Text className="text-muted-foreground text-sm mt-3 text-center">
+                No outfits available yet. Add some outfits in Planner to see them here.
+              </Text>
+            </View>
+          )}
         </View>
       </View>
 
