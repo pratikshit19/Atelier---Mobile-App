@@ -148,7 +148,7 @@ export default function CanvasScreen() {
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Palette size={24} color="#6366f1" />
+          <Palette size={24} color="#7c3aed" />
           <Text style={styles.headerTitle}>Studio</Text>
         </View>
         <Button size="sm" onPress={async () => {
@@ -177,7 +177,7 @@ export default function CanvasScreen() {
         {items.length === 0 ? (
           <View style={styles.emptyState}>
             <View style={styles.emptyIcon}>
-              <Plus size={32} color="#6366f1" />
+              <Plus size={32} color="#7c3aed" />
             </View>
             <Text style={styles.emptyTitle}>Workspace Empty</Text>
             <Text style={styles.emptySubtitle}>
@@ -368,14 +368,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   addButton: {
-    backgroundColor: '#6366f1',
+    backgroundColor: '#7c3aed',
     paddingHorizontal: 32,
     paddingVertical: 16,
     borderRadius: 16,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    shadowColor: '#6366f1',
+    shadowColor: '#7c3aed',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
     shadowRadius: 12,
@@ -429,7 +429,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   drawerClose: {
-    color: '#6366f1',
+    color: '#7c3aed',
     fontSize: 12,
     fontWeight: 'bold',
   },

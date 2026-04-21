@@ -76,7 +76,7 @@ export default function SignupScreen() {
 
         <View className="mt-8 flex-row items-center justify-center gap-2">
           <TouchableOpacity onPress={() => router.push('/login')} className="flex-row items-center gap-2">
-            <ArrowLeft size={18} color="#6366f1" />
+            <ArrowLeft size={18} color="#7c3aed" />
             <Text className="text-primary font-bold text-sm">Back to sign in</Text>
           </TouchableOpacity>
         </View>
