@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, Image, TouchableOpacity, ActivityIndicator, RefreshControl, ScrollView } from 'react-native';
+import { View, Text, FlatList, Image, TouchableOpacity, ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
-import { Search, Plus, Filter, Shirt } from 'lucide-react-native';
-import { Input, Button } from '../../components/ui';
-import * as ImagePicker from 'expo-image-picker';
+import { Search, Plus, Filter, Shirt, Sparkles } from 'lucide-react-native';
+import { AddItemModal } from '../../components/AddItemModal';
+import { Button, Input, Badge } from '../../components/ui';
+import { Header } from '../../components/Header';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function ClosetScreen() {
   const router = useRouter();
@@ -16,6 +19,9 @@ export default function ClosetScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<string | null>(null);
+  
+  const [isAddModalVisible, setIsAddModalVisible] = useState(false);
+  const [isAdding, setIsAdding] = useState(false);
 
   const fetchItems = async () => {
     if (!user) return;
@@ -42,48 +48,6 @@ export default function ClosetScreen() {
     fetchItems();
   };
 
-  const pickImage = async () => {
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        quality: 0.5,
-        base64: true,
-      });
-
-      if (!result.canceled && result.assets[0].base64) {
-        setLoading(true);
-        const base64 = result.assets[0].base64;
-        const fileName = `${user?.id}/${Date.now()}.png`;
-
-        const { data: storageData, error: storageError } = await supabase.storage
-          .from('closet')
-          .upload(fileName, decode(base64), {
-            contentType: 'image/png',
-          });
-
-        if (storageError) throw storageError;
-
-        const { data } = supabase.storage.from('closet').getPublicUrl(fileName);
-        const publicUrl = data?.publicUrl || '';
-
-        const { error: dbError } = await supabase.from('items').insert({
-          user_id: user?.id,
-          name: 'New Mobile Item',
-          category: 'Tops',
-          image_url: publicUrl,
-        });
-
-        if (dbError) throw dbError;
-        fetchItems();
-      }
-    } catch (error: any) {
-      alert('Upload failed: ' + error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const decode = (base64: string) => {
     const binaryString = atob(base64);
     const bytes = new Uint8Array(binaryString.length);
@@ -93,95 +57,172 @@ export default function ClosetScreen() {
     return bytes;
   };
 
+  const handleAddItem = async (itemData: any) => {
+    if (!user || !itemData.base64) return;
+    setIsAdding(true);
+
+    try {
+      const fileName = `${user.id}/${Date.now()}.png`;
+
+      const { data: storageData, error: storageError } = await supabase.storage
+        .from('closet')
+        .upload(fileName, decode(itemData.base64), {
+          contentType: 'image/png',
+        });
+
+      if (storageError) throw storageError;
+
+      const { data } = supabase.storage.from('closet').getPublicUrl(fileName);
+      const publicUrl = data?.publicUrl || '';
+
+      const { error: dbError } = await supabase.from('items').insert({
+        user_id: user.id,
+        name: itemData.name || 'Untitled Item',
+        category: itemData.category,
+        image_url: publicUrl,
+        price: itemData.price,
+      });
+
+      if (dbError) throw dbError;
+      
+      setIsAddModalVisible(false);
+      fetchItems();
+    } catch (error: any) {
+      alert('Upload failed: ' + error.message);
+    } finally {
+      setIsAdding(false);
+    }
+  };
+
   const filteredItems = items.filter((item) =>
     item.name.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
-    <SafeAreaView className="flex-1 bg-[#09090b]">
-      <View className="px-6 pt-8 pb-4">
-        <View className="flex-row items-center justify-between mb-5">
-          <View>
-            <Text className="text-white text-2xl font-semibold tracking-tight">Your Closet</Text>
-            <Text className="text-muted-foreground mt-2 text-sm leading-6">
-              Refining your personal collection.
-            </Text>
-          </View>
-          <Button size="icon" className="rounded-full h-11 w-11" onPress={pickImage}>
-            <Plus size={20} color="white" />
-          </Button>
-        </View>
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <Header />
+      
+      <View style={styles.headerContainer}>
+        <Text style={styles.title}>YOUR CLOSET</Text>
+        <Text style={styles.subtitle}>{items.length} items curated since March 2024</Text>
 
-        <View className="flex-row gap-2 mb-4">
-          <View className="flex-1 relative">
-            <View className="absolute left-3 top-3 z-10">
-              <Search size={18} color="#71717a" />
-            </View>
+        <View style={styles.searchRow}>
+          <View style={styles.searchInputWrapper}>
+            <Search size={18} color="#71717a" style={styles.searchIcon} />
             <Input
-              className="pl-10 h-11"
-              placeholder="Search collection..."
+              placeholder="Search archive..."
               value={search}
               onChangeText={setSearch}
+              style={styles.searchInput}
             />
           </View>
-          <Button
-            variant="secondary"
-            size="icon"
-            className="h-11 w-11"
-            onPress={() => setCategory(null)}
-          >
-            <Filter size={18} color="#71717a" />
-          </Button>
         </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-5">
-          {['All', 'Tops', 'Bottoms', 'Outerwear', 'Shoes'].map((cat) => (
-            <TouchableOpacity
-              key={cat}
-              onPress={() => setCategory(cat === 'All' ? null : cat)}
-              className={`mr-3 rounded-full px-4 py-2 border ${category === cat || (cat === 'All' && !category) ? 'border-primary bg-primary/10' : 'border-white/10 bg-white/5'}`}>
-              <Text className={`text-[10px] uppercase tracking-[0.3em] font-semibold ${category === cat || (cat === 'All' && !category) ? 'text-white' : 'text-muted-foreground'}`}>
-                {cat}
-              </Text>
-            </TouchableOpacity>
-          ))}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filterContent}>
+          {['All Pieces', 'Outerwear', 'Knitwear', 'Tops', 'Bottoms', 'Footwear'].map((cat) => {
+            const isActive = category === cat || (cat === 'All Pieces' && !category);
+            return (
+              <TouchableOpacity
+                key={cat}
+                onPress={() => setCategory(cat === 'All Pieces' ? null : cat)}
+                style={[styles.filterChip, isActive && styles.filterChipActive]}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]}>
+                  {cat.toUpperCase()}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
       </View>
 
       {loading ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator color="#7c3aed" />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator color="#e08a6d" />
         </View>
       ) : (
         <FlatList
           data={filteredItems}
           numColumns={2}
           keyExtractor={(item) => item.id}
-          columnWrapperStyle={{ paddingHorizontal: 20, gap: 16 }}
-          contentContainerStyle={{ paddingBottom: 100 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#7c3aed" />}
+          columnWrapperStyle={styles.gridRow}
+          contentContainerStyle={styles.gridContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#e08a6d" />}
           renderItem={({ item }) => (
             <TouchableOpacity
-              className="flex-1 mb-4"
+              style={styles.itemCard}
               onPress={() => router.push(`/canvas?item_id=${item.id}`)}
+              activeOpacity={0.9}
             >
-              <View className="bg-card border border-white/5 rounded-3xl overflow-hidden aspect-square">
-                <Image source={{ uri: item.image_url }} className="w-full h-full" resizeMode="cover" />
+              <View style={styles.imageContainer}>
+                <Image source={{ uri: item.image_url }} style={styles.image} resizeMode="cover" />
               </View>
-              <View className="mt-3 px-1">
-                <Text className="text-white font-bold text-sm truncate">{item.name}</Text>
-                <Text className="text-muted-foreground text-[10px] uppercase tracking-[0.35em] mt-1">{item.category}</Text>
+              <View style={styles.itemInfo}>
+                <Text style={styles.itemCategory}>{item.category?.toUpperCase() || 'ESSENTIALS'}</Text>
+                <Text style={styles.itemName}>{item.name.toUpperCase()}</Text>
+                <Text style={styles.itemMeta}>Charcoal Grey · Size L</Text>
               </View>
             </TouchableOpacity>
           )}
           ListEmptyComponent={
-            <View className="flex-1 items-center justify-center py-20">
-              <Shirt size={48} color="#27272a" />
-              <Text className="text-muted-foreground text-sm mt-4">Your closet is empty.</Text>
+            <View style={styles.emptyContainer}>
+              <View style={styles.emptyIconBox}>
+                <Shirt size={32} color="#52525b" />
+              </View>
+              <Text style={styles.emptyText}>Your closet is empty.</Text>
             </View>
           }
         />
       )}
+
+      {/* FAB */}
+      <TouchableOpacity 
+        style={styles.fab} 
+        onPress={() => setIsAddModalVisible(true)}
+        activeOpacity={0.9}
+      >
+        <Plus size={24} color="#090909" />
+      </TouchableOpacity>
+
+      <AddItemModal 
+        visible={isAddModalVisible} 
+        onClose={() => setIsAddModalVisible(false)} 
+        onAdd={handleAddItem}
+        loading={isAdding}
+      />
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: '#090909' },
+  headerContainer: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 16 },
+  title: { color: '#ffffff', fontSize: 28, fontWeight: '700', letterSpacing: -0.5 },
+  subtitle: { color: '#71717a', fontSize: 13, marginTop: 8 },
+  searchRow: { flexDirection: 'row', gap: 12, marginTop: 24, marginBottom: 24, alignItems: 'center' },
+  searchInputWrapper: { flex: 1, position: 'relative', justifyContent: 'center' },
+  searchIcon: { position: 'absolute', left: 14, zIndex: 10 },
+  searchInput: { paddingLeft: 42, borderRadius: 4, height: 48, backgroundColor: '#161616', borderWidth: 0 },
+  filterScroll: { marginBottom: 8 },
+  filterContent: { paddingRight: 20 },
+  filterChip: { paddingHorizontal: 16, paddingVertical: 10, marginRight: 12, borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  filterChipActive: { borderBottomColor: '#e08a6d' },
+  filterChipText: { color: '#71717a', fontSize: 11, fontWeight: '700', letterSpacing: 1 },
+  filterChipTextActive: { color: '#ffffff' },
+  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  gridRow: { paddingHorizontal: 20, gap: 16 },
+  gridContent: { paddingBottom: 120 },
+  itemCard: { flex: 1, marginBottom: 32 },
+  imageContainer: { backgroundColor: '#141414', borderRadius: 0, aspectRatio: 0.75, overflow: 'hidden', marginBottom: 12 },
+  image: { width: '100%', height: '100%' },
+  itemInfo: { paddingHorizontal: 0, gap: 4 },
+  itemCategory: { color: '#e08a6d', fontSize: 9, fontWeight: '700', letterSpacing: 1 },
+  itemName: { color: '#ffffff', fontSize: 14, fontWeight: '700', letterSpacing: 0.5 },
+  itemMeta: { color: '#71717a', fontSize: 12 },
+  emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 80 },
+  emptyIconBox: { width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(255,255,255,0.03)', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+  emptyText: { color: '#71717a', fontSize: 14 },
+  fab: { position: 'absolute', bottom: 100, right: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: '#e08a6d', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5 },
+});

@@ -1,68 +1,108 @@
 import { Tabs } from 'expo-router';
-import { Shirt, Palette, Calendar, LayoutDashboard, User } from 'lucide-react-native';
+import { Shirt, LayoutGrid, User, Settings, FolderArchive, Layers } from 'lucide-react-native';
+import { View, Text, StyleSheet, Platform } from 'react-native';
 
 export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarShowLabel: false,
-        tabBarStyle: {
-          position: 'absolute',
-          bottom: 16,
-          left: 16,
-          right: 16,
-          elevation: 10,
-          backgroundColor: '#050505',
-          borderRadius: 36,
-          height: 72,
-          borderWidth: 1,
-          borderColor: 'rgba(255, 255, 255, 0.15)',
-          borderTopColor: 'transparent',
-          shadowColor: '#000',
-          shadowOpacity: 0.25,
-          shadowRadius: 20,
-          shadowOffset: { width: 0, height: 8 },
+        tabBarShowLabel: true,
+        tabBarLabelStyle: {
+          fontSize: 10,
+          fontWeight: '700',
+          letterSpacing: 1,
+          marginTop: -4,
+          paddingBottom: 8,
         },
-        tabBarActiveTintColor: '#f5f5f5',
-        tabBarInactiveTintColor: '#6b6b6b',
+        tabBarStyle: {
+          backgroundColor: '#090909',
+          height: Platform.OS === 'ios' ? 88 : 72,
+          borderTopWidth: 1,
+          borderTopColor: 'rgba(255, 255, 255, 0.05)',
+          paddingTop: 8,
+        },
+        tabBarActiveTintColor: '#e08a6d',
+        tabBarInactiveTintColor: '#52525b',
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Studio',
-          tabBarIcon: ({ color }) => <LayoutDashboard size={24} color={color} />,
+          title: 'STUDIO',
+          tabBarIcon: ({ color, focused }) => (
+            <View style={styles.iconContainer}>
+              {focused && <View style={styles.activeLine} />}
+              <LayoutGrid size={20} color={color} />
+            </View>
+          ),
         }}
       />
       <Tabs.Screen
         name="closet"
         options={{
-          title: 'Closet',
-          tabBarIcon: ({ color }) => <Shirt size={24} color={color} />,
+          title: 'ARCHIVE',
+          tabBarIcon: ({ color, focused }) => (
+            <View style={styles.iconContainer}>
+              {focused && <View style={styles.activeLine} />}
+              <FolderArchive size={20} color={color} />
+            </View>
+          ),
         }}
       />
       <Tabs.Screen
-        name="canvas"
+        name="outfits"
         options={{
-          title: 'Design',
-          tabBarIcon: ({ color }) => <Palette size={24} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="planner"
-        options={{
-          title: 'Plan',
-          tabBarIcon: ({ color }) => <Calendar size={24} color={color} />,
+          title: 'OUTFITS',
+          tabBarIcon: ({ color, focused }) => (
+            <View style={styles.iconContainer}>
+              {focused && <View style={styles.activeLine} />}
+              <Layers size={20} color={color} />
+            </View>
+          ),
         }}
       />
       <Tabs.Screen
         name="account"
         options={{
-          title: 'Account',
-          tabBarIcon: ({ color }) => <User size={24} color={color} />,
+          title: 'SETTINGS',
+          tabBarIcon: ({ color, focused }) => (
+            <View style={styles.iconContainer}>
+              {focused && <View style={styles.activeLine} />}
+              <Settings size={20} color={color} />
+            </View>
+          ),
+        }}
+      />
+      {/* Hidden tabs */}
+      <Tabs.Screen
+        name="canvas"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="planner"
+        options={{
+          href: null,
         }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  iconContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    height: '100%',
+  },
+  activeLine: {
+    position: 'absolute',
+    top: -12,
+    width: 32,
+    height: 2,
+    backgroundColor: '#e08a6d',
+  },
+});

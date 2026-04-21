@@ -8,19 +8,21 @@ import {
   Image,
   Animated,
   ScrollView,
+  PanResponder,
+  ActivityIndicator
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Palette, Save, Trash2, Plus } from 'lucide-react-native';
-import { Button } from '../../components/ui';
+import { Button, Input } from '../../components/ui';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface StudioItem {
   id: string;
+  real_item_id: string;
   image_url: string;
   x: number;
   y: number;
@@ -37,16 +39,44 @@ interface ClosetItem {
 const DraggableItem = ({
   item,
   onRemove,
+  onUpdate,
 }: {
   item: StudioItem;
   onRemove: () => void;
   onUpdate: (updates: Partial<StudioItem>) => void;
 }) => {
+  const pan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], {
+        useNativeDriver: false,
+      }),
+      onPanResponderRelease: (e, gestureState) => {
+        onUpdate({
+          x: item.x + gestureState.dx,
+          y: item.y + gestureState.dy,
+        });
+        pan.setValue({ x: 0, y: 0 });
+      },
+    })
+  ).current;
+
   return (
-    <View
+    <Animated.View
+      {...panResponder.panHandlers}
       style={[
         styles.itemContainer,
-        { transform: [{ translateX: item.x }, { translateY: item.y }] },
+        {
+          transform: [
+            { translateX: Animated.add(pan.x, item.x) },
+            { translateY: Animated.add(pan.y, item.y) },
+            { scale: item.scale || 1 },
+            { rotate: `${item.rotation || 0}deg` },
+          ],
+        },
       ]}
     >
       <View style={{ position: 'relative' }}>
@@ -62,11 +92,12 @@ const DraggableItem = ({
           <Trash2 size={14} color="white" />
         </TouchableOpacity>
       </View>
-    </View>
+    </Animated.View>
   );
 };
 
 export default function CanvasScreen() {
+  const router = useRouter();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams() as { item_id?: string };
@@ -74,6 +105,8 @@ export default function CanvasScreen() {
   const [items, setItems] = useState<StudioItem[]>([]);
   const [closetItems, setClosetItems] = useState<ClosetItem[]>([]);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [outfitName, setOutfitName] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
   const drawerY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
 
@@ -123,6 +156,7 @@ export default function CanvasScreen() {
 
     const newItem: StudioItem = {
       id: Math.random().toString(36).substring(2, 11),
+      real_item_id: item.id,
       image_url: item.image_url,
       x: SCREEN_WIDTH / 4 + (Math.random() * 40 - 20),
       y: SCREEN_HEIGHT / 4 + (Math.random() * 40 - 20),
@@ -143,30 +177,74 @@ export default function CanvasScreen() {
     setItems((prev) => prev.filter((item) => item.id !== id));
   };
 
+  const handleSave = async () => {
+    if (!user) return;
+    if (items.length === 0) {
+      alert('Add items to the board before saving.');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const { data: outfitData, error: outfitError } = await supabase
+        .from('outfits')
+        .insert({
+          user_id: user.id,
+          name: outfitName.trim() || 'Studio Design',
+        })
+        .select()
+        .single();
+
+      if (outfitError) throw outfitError;
+
+      const outfitItems = items.map(item => ({
+        outfit_id: outfitData.id,
+        item_id: item.real_item_id,
+      }));
+
+      const { error: itemsError } = await supabase
+        .from('outfit_items')
+        .insert(outfitItems);
+
+      if (itemsError) throw itemsError;
+
+      router.push('/outfits');
+    } catch (error) {
+      console.error(error);
+      alert('Failed to save the outfit.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <Palette size={24} color="#7c3aed" />
-          <Text style={styles.headerTitle}>Studio</Text>
+          <Input
+            style={styles.headerTitleInput}
+            value={outfitName}
+            onChangeText={setOutfitName}
+            placeholder="Name your outfit..."
+            placeholderTextColor="#71717a"
+          />
         </View>
-        <Button size="sm" onPress={async () => {
-          if (items.length === 0) {
-            alert('Add items to the board before saving.');
-            return;
-          }
-
-          try {
-            await AsyncStorage.setItem('@atelier_saved_canvas', JSON.stringify({ savedAt: Date.now(), items }));
-            alert('Board saved locally. You can continue designing or reopen this screen later.');
-          } catch (error) {
-            console.error(error);
-            alert('Failed to save the board.');
-          }
-        }}>
-          <Save size={16} color="white" />
-          <Text style={styles.saveText}>Save</Text>
+        <Button 
+          size="sm" 
+          onPress={handleSave} 
+          disabled={isSaving}
+          style={styles.saveButton}
+        >
+          {isSaving ? (
+            <ActivityIndicator size="small" color="#18181b" />
+          ) : (
+            <>
+              <Save size={16} color="#18181b" />
+              <Text style={styles.saveText}>Save</Text>
+            </>
+          )}
         </Button>
       </View>
 
@@ -181,7 +259,7 @@ export default function CanvasScreen() {
             </View>
             <Text style={styles.emptyTitle}>Workspace Empty</Text>
             <Text style={styles.emptySubtitle}>
-              Tap "Add Items" below to begin.
+              Tap "Add Items" below to begin designing.
             </Text>
           </View>
         ) : (
@@ -204,13 +282,14 @@ export default function CanvasScreen() {
             { bottom: insets.bottom + 104 },
           ]}
         >
-          <TouchableOpacity
-            style={styles.addButton}
+          <Button
+            size="lg"
             onPress={() => toggleDrawer(true)}
+            style={styles.addButton}
           >
-            <Plus size={20} color="white" />
+            <Plus size={20} color="#18181b" />
             <Text style={styles.addButtonText}>Add Items</Text>
-          </TouchableOpacity>
+          </Button>
         </View>
       )}
 
@@ -230,9 +309,9 @@ export default function CanvasScreen() {
         <View style={styles.drawerHandle} />
         <View style={styles.drawerHeader}>
           <Text style={styles.drawerTitle}>Select from Closet</Text>
-          <TouchableOpacity onPress={() => toggleDrawer(false)}>
-            <Text style={styles.drawerClose}>Close</Text>
-          </TouchableOpacity>
+          <Button variant="ghost" size="sm" onPress={() => toggleDrawer(false)}>
+            Close
+          </Button>
         </View>
 
         <ScrollView contentContainerStyle={styles.drawerGrid}>
@@ -241,6 +320,7 @@ export default function CanvasScreen() {
               key={item.id}
               onPress={() => addItem(item)}
               style={styles.closetItem}
+              activeOpacity={0.8}
             >
               <Image
                 source={{ uri: item.image_url }}
@@ -261,7 +341,7 @@ export default function CanvasScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#09090b',
+    backgroundColor: '#05060c',
   },
   header: {
     paddingHorizontal: 24,
@@ -271,27 +351,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#09090b',
+    backgroundColor: '#05060c',
     zIndex: 10,
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    flex: 1,
   },
-  headerTitle: {
-    color: '#fff',
+  headerTitleInput: {
+    backgroundColor: 'transparent',
+    borderWidth: 0,
     fontSize: 20,
-    fontWeight: 'bold',
-    letterSpacing: -0.5,
+    fontWeight: '700',
+    height: 40,
+    color: '#fff',
+    paddingHorizontal: 0,
+  },
+  saveButton: {
+    height: 36,
+    paddingHorizontal: 16,
+    borderRadius: 18,
+    gap: 6,
   },
   saveText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 10,
+    color: '#18181b',
+    fontWeight: '700',
+    fontSize: 12,
     textTransform: 'uppercase',
     letterSpacing: 1.5,
-    marginLeft: 8,
   },
   canvas: {
     flex: 1,
@@ -302,7 +391,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     opacity: 0.05,
     backgroundColor: 'transparent',
-    borderWidth: 0.5,
+    borderWidth: 1,
     borderColor: '#fff',
     borderStyle: 'dashed',
   },
@@ -317,19 +406,20 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: 'rgba(99,102,241,0.1)',
+    backgroundColor: 'rgba(124, 58, 237, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
   },
   emptyTitle: {
     color: '#fff',
+    fontSize: 18,
     fontWeight: 'bold',
     textAlign: 'center',
     marginBottom: 8,
   },
   emptySubtitle: {
-    color: '#71717a',
+    color: '#a1a1aa',
     textAlign: 'center',
     fontSize: 12,
   },
@@ -368,29 +458,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   addButton: {
-    backgroundColor: '#7c3aed',
     paddingHorizontal: 32,
-    paddingVertical: 16,
-    borderRadius: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
+    borderRadius: 32,
     gap: 12,
-    shadowColor: '#7c3aed',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
     elevation: 8,
   },
   addButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
+    color: '#05060c',
+    fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 1.5,
-    fontSize: 14,
+    fontSize: 12,
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.8)',
   },
   drawer: {
     position: 'absolute',
@@ -398,11 +484,11 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: SCREEN_HEIGHT * 0.8,
-    backgroundColor: '#18181b',
+    backgroundColor: '#111115',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.1)',
-    borderTopLeftRadius: 40,
-    borderTopRightRadius: 40,
+    borderTopColor: 'rgba(255,255,255,0.05)',
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
     zIndex: 100,
   },
   drawerHandle: {
@@ -416,22 +502,17 @@ const styles = StyleSheet.create({
   },
   drawerHeader: {
     paddingHorizontal: 24,
-    paddingBottom: 16,
+    paddingBottom: 24,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   drawerTitle: {
     color: '#fff',
-    fontWeight: 'bold',
+    fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 1.5,
     fontSize: 12,
-  },
-  drawerClose: {
-    color: '#7c3aed',
-    fontSize: 12,
-    fontWeight: 'bold',
   },
   drawerGrid: {
     flexDirection: 'row',
@@ -442,22 +523,24 @@ const styles = StyleSheet.create({
   },
   closetItem: {
     width: '47%',
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    backgroundColor: '#09090b',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 16,
+    borderRadius: 24,
     padding: 8,
   },
   closetImage: {
     width: '100%',
     aspectRatio: 1,
-    borderRadius: 12,
-    marginBottom: 8,
+    borderRadius: 16,
+    marginBottom: 12,
   },
   closetItemName: {
     color: '#fff',
-    fontSize: 10,
-    fontWeight: 'bold',
-    paddingHorizontal: 4,
+    fontSize: 12,
+    fontWeight: '600',
+    paddingHorizontal: 8,
+    paddingBottom: 4,
+    textAlign: 'center',
   },
 });
